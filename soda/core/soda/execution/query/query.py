@@ -10,6 +10,7 @@ from soda.common.undefined_instance import undefined
 from soda.sampler.db_sample import DbSample
 from soda.sampler.sample_context import SampleContext
 from soda.sampler.sampler import Sampler
+from soda.execution.heimdall.heimdall_connection import HeimdallConnection  # @PATTERN_FORK:NEW - import HeimdallConnection as a replacement for the original cursor
 
 
 class Query:
@@ -34,6 +35,7 @@ class Query:
     ):
         self.logs = data_source_scan.scan._logs
         self.data_source_scan = data_source_scan
+        self.data_source_type = data_source_scan.data_source.type # @PATTERN_FORK:NEW - capture the data source type for Heimdall
         self.query_name: str = Query.build_query_name(
             data_source_scan, table, partition, column, unqualified_query_name
         )
@@ -138,7 +140,8 @@ class Query:
         start = datetime.now()
         data_source = self.data_source_scan.data_source
         try:
-            cursor = data_source.connection.cursor()
+            # cursor = data_source.connection.cursor() # @PATTERN_FORK:ORIGINAL - remove original cursor that would point to a datasource connection
+            cursor = HeimdallConnection(data_source_type=self.data_source_type, log=self.logs).cursor() # @PATTERN_FORK:REPLACEMENT
             try:
                 self.logs.debug(f"Query {self.query_name}:\n{self.sql}")
                 if execute:
@@ -185,7 +188,8 @@ class Query:
         for cursor in self._execute_cursor(False):
             # Check if query does not contain forbidden columns and only create sample if it does not.
             # Query still needs to execute in case this is a query that also sets a metric value. (e.g. reference check)
-            allow_samples = True
+            # allow_samples = True # @PATTERN_FORK:ORIGINAL - we don't want to send samples to Heimdall (SELECT * FROM table LIMIT 100)
+            allow_samples = False # @PATTERN_FORK:REPLACEMENT
             offending_columns = []
 
             if self.partition and self.partition.table:
@@ -232,9 +236,11 @@ class Query:
 
                     self.sample_ref = sampler.store_sample(sample_context)
                 else:
-                    self.logs.info(
-                        f"Skipping samples from query '{self.query_name}'. Excluded column(s) present: {offending_columns}."
-                    )
+                    # @PATTERN_FORK:ORIGINAL - because we are hardcoding allow_samples=False, we don't need to log this
+                    # self.logs.info(
+                    #     f"Skipping samples from query '{self.query_name}'. Excluded column(s) present: {offending_columns}."
+                    # )
+                    continue # @PATTERN_FORK:REPLACEMENT
             except BaseException as e:
                 self._cursor_execute_exception_handler(e)
 
