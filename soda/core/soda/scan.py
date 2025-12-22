@@ -137,7 +137,18 @@ class Scan:
                               ~ will be expanded to the user home dir.
         """
         try:
-            configuration_yaml_str = self._read_file("configuration", file_path)
+            # configuration_yaml_str = self._read_file("configuration", file_path) # @PATTERN_FORK:ORIGINAL - Hardcoded configuration below
+
+            # @PATTERN_FORK:NEW - Begin
+            configuration_yaml_str = f"""
+            data_source snowflake:
+                type: snowflake
+
+            data_source trino:
+                type: trino
+            """
+            # @PATTERN_FORK:NEW - End
+
             self._parse_configuration_yaml_str(
                 configuration_yaml_str=configuration_yaml_str,
                 file_path=file_path,
